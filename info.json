@@ -1,0 +1,9 @@
+{
+  "name": "puppy-ups-tools",
+  "version": "0.2.0",
+  "title": "Puppy's UPS Tools",
+  "author": "Puppy",
+  "factorio_version": "1.1",
+  "dependencies": ["base >= 1.1", "flib > 0.9.2"],
+  "description": "A series of tools designed to help out with your UPS."
+}

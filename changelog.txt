@@ -1,0 +1,8 @@
+---------------------------------------------------------------------------------------------------
+Version: 0.2.0
+Date: 2023.02.04
+  Changes:
+    - Upgraded the UI to handle surfaces better. You can view all results or filter by a specific surface and the UI no longer fails to scale well if there are many surfaces. Additionally, we can now display electric networks with multiple surfaces.
+    - When viewing an electric network, SE's navigation satellite can be used if available for cross-surface viewing.    
+  Bugfixes:
+    - UI no longer breaks if surfaces become invalid after a scan completes.
