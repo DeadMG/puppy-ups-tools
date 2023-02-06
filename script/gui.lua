@@ -3,17 +3,23 @@ local event = require("__flib__.event")
 local search = require('script.search')
 
 local windowName = "ups-tools-host"
+local renderingName = "puppy-ups-tools"
+
+local LINE_COLOR = { r = 0.9, g = 0, b = 0, a = 1 }
+local LINE_WIDTH = 4
+local HALF_WIDTH = (LINE_WIDTH / 2) / 32  -- 32 pixels per tile
 
 function createWindow(player_index)
     local player = game.get_player(player_index)
     
     global.dialog_settings = global.dialog_settings or {}
-    global.dialog_settings[player_index] = global.dialog_settings[player_index] or {
-        search_electric = true,
-		filter = "all"
-    }
+    global.dialog_settings[player_index] = global.dialog_settings[player_index] or {}
     
     local dialog_settings = global.dialog_settings[player_index]
+    
+    dialog_settings.close_on_goto = dialog_settings.close_on_goto or false
+    dialog_settings.search_electric = (dialog_settings.search_electric == nil and true) or dialog_settings.search_electric
+    dialog_settings.filter = dialog_settings.filter or "all"
     
     local rootgui = player.gui.screen
     local dialog = gui.build(rootgui, {
@@ -28,6 +34,7 @@ function createWindow(player_index)
                     -- Search options
                     {type="label", caption={"ups-tools.search-title"}},
                     {type="checkbox", caption={"ups-tools.search-electric"}, save_as="search_electric", state=dialog_settings.search_electric, handlers="ups_tools_handlers.search_electric"},
+                    {type="checkbox", caption={"ups-tools.close_on_goto"}, save_as="close_on_goto", state=dialog_settings.close_on_goto, handlers="ups_tools_handlers.close_on_goto"},
                     -- Results
                     {type="flow", direction="vertical", save_as="results"},
                     -- Search button
@@ -37,8 +44,13 @@ function createWindow(player_index)
             }}})
             
     dialog.titlebar.flow.drag_target = dialog.main_window
-    dialog.main_window.force_auto_center()    
     dialog_settings.dialog = dialog
+    
+    if dialog_settings.location then
+        dialog.main_window.location = dialog_settings.location
+    else
+        dialog.main_window.force_auto_center()    
+    end
     
     player.opened = dialog.main_window
     
@@ -109,7 +121,7 @@ function renderNetwork(network)
         {
             type="sprite-button", 
             sprite="utility/go_to_arrow", 
-            tags={entity=sample_entity.name, position=sample_entity.position, surface_index=sample_entity.surface.index}, 
+            tags={network_id=network.id}, 
             style_mods={height=20,width=20}, 
             handlers="ups_tools_handlers.go_to_network"
         },
@@ -208,15 +220,102 @@ function isNavsatAvailable(player)
 	return remote.call('space-exploration', 'remote_view_is_unlocked', {player=player})
 end
 
-function goTo(player, entity, x, y, surface_index)
+function goTo(player, entity)
+    local x = entity.position.x or entity.position[1]
+    local y = entity.position.y or entity.position[2]
+
     if isNavsatAvailable(player) then
-	    local zone = remote.call('space-exploration', 'get_zone_from_surface_index', { surface_index=surface_index })
+	    local zone = remote.call('space-exploration', 'get_zone_from_surface_index', { surface_index=entity.surface.index })
 		if zone then		
 	        remote.call('space-exploration', 'remote_view_start', { player = player, zone_name = zone.name, position={x=x, y=y}, location_name="", freeze_history=true })
+            highlight(player, entity.surface, {entity.selection_box})
 		    return
 		end
 	end
-	player.print("[entity=" .. entity .. "] at [gps=" .. x .. "," .. y .. "," .. game.surfaces[surface_index].name .. "]")
+	player.print("[entity=" .. entity.name .. "] at [gps=" .. x .. "," .. y .. "," .. entity.surface.name .. "]")
+end
+
+function clear_markers(player)
+  -- Clear all old markers belonging to player
+  if #game.players == 1 then
+    rendering.clear(renderingName)
+  else
+    local ids = rendering.get_all_ids(renderingName)
+    for _, id in pairs(ids) do
+      if rendering.get_players(id)[1].index == player.index then
+        rendering.destroy(id)
+      end
+    end
+  end
+end
+
+function draw_markers(player, surface, selection_boxes)  
+  local time_to_live = 5 * 60
+  -- Draw new markers
+  for _, raw_box in pairs(selection_boxes) do
+    local selection_box = {
+        orientation = raw_box.orientation,
+        left_top = {
+            x = raw_box.left_top.x or raw_box.left_top[1],
+            y = raw_box.left_top.y or raw_box.left_top[2]
+        },
+        right_bottom = {
+            x = raw_box.right_bottom.x or raw_box.right_bottom[1],
+            y = raw_box.right_bottom.y or raw_box.right_bottom[2]
+        }
+    }
+    
+    if selection_box.orientation then
+      local angle = selection_box.orientation * 360
+
+      -- Four corners
+      local left_top = selection_box.left_top
+      local right_bottom = selection_box.right_bottom
+      local right_top = {x = right_bottom.x, y = left_top.y}
+      local left_bottom = {x = left_top.x, y = right_bottom.y}
+
+      -- Extend the end of each line by HALF_WIDTH so that corners are still right angles despite `width`
+      local lines = {
+        {from = {x = left_top.x - HALF_WIDTH, y = left_top.y}, to = {x = right_top.x + HALF_WIDTH, y = right_top.y}},  -- Top
+        {from = {x = left_bottom.x - HALF_WIDTH, y = left_bottom.y}, to = {x = right_bottom.x + HALF_WIDTH, y = right_bottom.y}},  -- Bottom
+        {from = {x = left_top.x, y = left_top.y - HALF_WIDTH}, to = {x = left_bottom.x, y = left_bottom.y + HALF_WIDTH}},  -- Left
+        {from = {x = right_top.x, y = right_top.y - HALF_WIDTH}, to = {x = right_bottom.x, y = right_bottom.y + HALF_WIDTH}},  -- Right
+      }
+
+      local center = {x = (left_top.x + right_bottom.x) / 2, y = (left_top.y + right_bottom.y) / 2}
+      for _, line in pairs(lines) do
+        -- Translate each point to origin, rotate, then translate back
+        local rotated_from = add_vector(rotate_vector(subtract_vector(line.from, center), angle), center)
+        local rotated_to = add_vector(rotate_vector(subtract_vector(line.to, center), angle), center)
+
+        rendering.draw_line{
+          color = LINE_COLOR,
+          width = LINE_WIDTH,
+          from = rotated_from,
+          to = rotated_to,
+          surface = surface,
+          time_to_live = time_to_live,
+          players = {player},
+        }
+      end
+    else
+      rendering.draw_rectangle{
+        color = LINE_COLOR,
+        width = LINE_WIDTH,
+        filled = false,
+        left_top = selection_box.left_top,
+        right_bottom = selection_box.right_bottom,
+        surface = surface,
+        time_to_live = time_to_live,
+        players = {player},
+      }
+    end
+  end
+end
+
+function highlight(player, surface, selection_boxes)
+  clear_markers(player)
+  draw_markers(player, surface, selection_boxes)
 end
 
 function registerHandlers()
@@ -231,8 +330,14 @@ function registerHandlers()
             go_to_network = {
                 on_gui_click = function(e)
                     local player = game.get_player(e.player_index)
-					goTo(player, e.element.tags.entity, e.element.tags.position.x, e.element.tags.position.y, e.element.tags.surface_index)
-                    closeGui(e.player_index)
+                    local network = global.results.electric_networks[e.element.tags.network_id]
+                    local entity = network and firstValidEntity(network)
+                    if network and entity then
+                        goTo(player, entity)
+                        if (global.dialog_settings[e.player_index].close_on_goto) then closeGui(e.player_index) end
+                    else
+                        renderResults(e.player_index)
+                    end
                 end
             },
             delete_network = {
@@ -273,6 +378,11 @@ function registerHandlers()
                 on_gui_checked_state_changed = function(e)
                     global.dialog_settings[e.player_index].search_electric = e.element.state
                 end
+            },
+            close_on_goto = {
+                on_gui_checked_state_changed = function(e)
+                    global.dialog_settings[e.player_index].close_on_goto = e.element.state
+                end
             }
         },
     })
@@ -303,6 +413,20 @@ end
 function passthroughGuiEvent(event)
     return gui.dispatch_handlers(event)
 end
+
+event.register(defines.events.on_gui_location_changed, function(e)
+    if not e.element or e.element.name ~= windowName then return end
+    
+    global.dialog_settings = global.dialog_settings or {}
+    global.dialog_settings[e.player_index] = global.dialog_settings[e.player_index] or {}
+    global.dialog_settings[e.player_index].location = e.element.location
+end)
+
+script.on_configuration_changed(function()
+    for _, player in pairs(game.players) do
+        closeGui(player.index)
+    end
+end)
 
 function toggleGui(player_index)
     local player = game.get_player(player_index)

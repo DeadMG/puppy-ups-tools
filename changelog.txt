@@ -1,4 +1,12 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.2.1
+Date: 2023.02.06
+  Changes:
+    - The UI now remembers position when dragged.
+    - The user can now choose whether to close the GUI on go to. This is now turned off by default.
+    - Now draws a rendering highlight around the sample entity.
+
+---------------------------------------------------------------------------------------------------
 Version: 0.2.0
 Date: 2023.02.04
   Changes:
