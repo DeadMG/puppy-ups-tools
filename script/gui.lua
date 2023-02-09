@@ -5,17 +5,14 @@ local search = require('script.search')
 local windowName = "ups-tools-host"
 local renderingName = "puppy-ups-tools"
 
-local LINE_COLOR = { r = 0.9, g = 0, b = 0, a = 1 }
+local LINE_COLOR = { r = 0.35, g = 0.35, b = 1, a = 1 }
 local LINE_WIDTH = 4
 local HALF_WIDTH = (LINE_WIDTH / 2) / 32  -- 32 pixels per tile
 
 function createWindow(player_index)
     local player = game.get_player(player_index)
     
-    global.dialog_settings = global.dialog_settings or {}
-    global.dialog_settings[player_index] = global.dialog_settings[player_index] or {}
-    
-    local dialog_settings = global.dialog_settings[player_index]
+    local dialog_settings = ensureDialogSettings(player_index)
     
     dialog_settings.close_on_goto = dialog_settings.close_on_goto or false
     dialog_settings.search_electric = (dialog_settings.search_electric == nil and true) or dialog_settings.search_electric
@@ -60,19 +57,19 @@ end
 function renderResults(player_index)
     if not global.results then return end
     
-    local dialog_settings = global.dialog_settings[player_index] or {}
+    local dialog_settings = ensureDialogSettings(player_index)
     if not dialog_settings.dialog then return end    
     
-    renderElectricNetworks(dialog_settings.dialog.results, global.results.electric_networks, dialog_settings.filter)
+    renderElectricNetworks(dialog_settings.dialog.results, global.results.electric_networks, dialog_settings.filter, dialog_settings.last_network)
 end
 
-function renderElectricNetworks(parent, networks, filter)
+function renderElectricNetworks(parent, networks, filter, lastNetworkId)
     parent.clear()   
 
-    gui.build(parent, {renderNetworks(networks, filter)})
+    gui.build(parent, {renderNetworks(networks, filter, lastNetworkId)})
 end
 
-function renderNetworks(networks, filter)    
+function renderNetworks(networks, filter, lastNetworkId)    
 	local selectableSurfaces = getSelectableSurfaces(networks)
 	filter = filter or "all"
 	
@@ -82,7 +79,9 @@ function renderNetworks(networks, filter)
     return {type="flow", direction="vertical", children={
 	    {type="drop-down", caption="Surface", items=selectableSurfaces, selected_index=indexOf(selectableSurfaces, filter) or 1,handlers="ups_tools_handlers.electric_network_filter_changed"},
 	    {type="scroll-pane", horizontal_scroll_policy="never", vertical_scroll_policy="always", style_mods={horizontally_stretchable=true,maximal_height=700}, children={
-	        {type="table", column_count=3, children=flatten(mapArray(networks, renderNetwork))}
+	        {type="table", column_count=3, children=flatten(mapArray(networks, function(network)
+                return renderNetwork(network, network.id == lastNetworkId)
+            end))}
 	    }}
 	}}
 end
@@ -113,11 +112,12 @@ function getSurfaceName(surface)
     if surface.valid then return surface.name else return nil end
 end
 
-function renderNetwork(network)
+function renderNetwork(network, isLast)
     local sample_entity = firstValidEntity(network)
     if not sample_entity then return end
+    local style = (isLast and { font_color=LINE_COLOR }) or {}
     return {
-        {type="label", caption="#"..network.id .. " (" .. getSurfaceLabel(network) ..  ")" .. ": " .. tostring(#network.entities) .. " entities" },
+        {type="label", caption="#"..network.id .. " (" .. getSurfaceLabel(network) ..  ")" .. ": " .. tostring(#network.entities) .. " entities", style_mods=style },
         {
             type="sprite-button", 
             sprite="utility/go_to_arrow", 
@@ -318,6 +318,13 @@ function highlight(player, surface, selection_boxes)
   draw_markers(player, surface, selection_boxes)
 end
 
+function ensureDialogSettings(player_index)
+    global.dialog_settings = global.dialog_settings or {}
+    global.dialog_settings[player_index] = global.dialog_settings[player_index] or {}
+    
+    return global.dialog_settings[player_index]    
+end
+
 function registerHandlers()
     gui.add_handlers({
         ups_tools_handlers = {
@@ -332,9 +339,13 @@ function registerHandlers()
                     local player = game.get_player(e.player_index)
                     local network = global.results.electric_networks[e.element.tags.network_id]
                     local entity = network and firstValidEntity(network)
+                    local dialog_settings = ensureDialogSettings(e.player_index)
+                    
                     if network and entity then
                         goTo(player, entity)
-                        if (global.dialog_settings[e.player_index].close_on_goto) then closeGui(e.player_index) end
+                        dialog_settings.last_network = e.element.tags.network_id
+                        if (dialog_settings.close_on_goto) then closeGui(e.player_index)
+                        else renderResults(e.player_index) end
                     else
                         renderResults(e.player_index)
                     end

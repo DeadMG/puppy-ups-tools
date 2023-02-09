@@ -1,4 +1,11 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.2.2
+Date: 2023.02.09
+  Changes:
+    - The "sample entity highlight" is now blue rather than red as befits an electric network.
+    - The electric network list now highlights the most recently visited network (after upgrading to 0.2.2) in blue.
+
+---------------------------------------------------------------------------------------------------
 Version: 0.2.1
 Date: 2023.02.06
   Changes:
