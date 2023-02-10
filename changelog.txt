@@ -1,4 +1,11 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.2.3
+Date: 2023.02.10
+  Changes:
+    - There's now an option to highlight all entities in the network, instead of only one. Performance not guaranteed when used on larger networks.
+    - Limit the number of characters in the surface label to 40 characters to avoid UI breakage if a network has many surfaces.
+
+---------------------------------------------------------------------------------------------------
 Version: 0.2.2
 Date: 2023.02.09
   Changes:
