@@ -15,6 +15,7 @@ function createWindow(player_index)
     local dialog_settings = ensureDialogSettings(player_index)
     
     dialog_settings.close_on_goto = dialog_settings.close_on_goto or false
+    dialog_settings.highlight_all_scan_results = dialog_settings.highlight_all_scan_results or false
     dialog_settings.search_electric = (dialog_settings.search_electric == nil and true) or dialog_settings.search_electric
     dialog_settings.filter = dialog_settings.filter or "all"
     
@@ -32,6 +33,7 @@ function createWindow(player_index)
                     {type="label", caption={"ups-tools.search-title"}},
                     {type="checkbox", caption={"ups-tools.search-electric"}, save_as="search_electric", state=dialog_settings.search_electric, handlers="ups_tools_handlers.search_electric"},
                     {type="checkbox", caption={"ups-tools.close_on_goto"}, save_as="close_on_goto", state=dialog_settings.close_on_goto, handlers="ups_tools_handlers.close_on_goto"},
+                    {type="checkbox", caption={"ups-tools.highlight_all_scan_results"}, save_as="highlight_all_scan_results", state=dialog_settings.highlight_all_scan_results, handlers="ups_tools_handlers.highlight_all_scan_results"},
                     -- Results
                     {type="flow", direction="vertical", save_as="results"},
                     -- Search button
@@ -105,7 +107,9 @@ function filterForSurfaces(networks, filter)
 end
 
 function getSurfaceLabel(network)
-	return table.concat(mapArray(network.surfaces, getSurfaceName), ", ")
+	local surfaces = table.concat(mapArray(network.surfaces, getSurfaceName), ", ")
+    if #surfaces < 40 then return surfaces end
+    return string.sub(surfaces, 1, 37) .. "..."
 end
 
 function getSurfaceName(surface)
@@ -139,6 +143,14 @@ function firstValidEntity(network)
     for _, entity in pairs(network.entities) do
         if entity.valid and entity.electric_network_id == network.id then return entity end
     end
+end
+
+function allValidEntities(network)
+    local results = {}
+    for _, entity in pairs(network.entities) do
+        if entity.valid and entity.electric_network_id == network.id then table.insert(results, entity) end
+    end
+    return results
 end
 
 function closeGui(player_index)
@@ -220,7 +232,7 @@ function isNavsatAvailable(player)
 	return remote.call('space-exploration', 'remote_view_is_unlocked', {player=player})
 end
 
-function goTo(player, entity)
+function goTo(player, entity, selection_boxes)
     local x = entity.position.x or entity.position[1]
     local y = entity.position.y or entity.position[2]
 
@@ -228,7 +240,7 @@ function goTo(player, entity)
 	    local zone = remote.call('space-exploration', 'get_zone_from_surface_index', { surface_index=entity.surface.index })
 		if zone then		
 	        remote.call('space-exploration', 'remote_view_start', { player = player, zone_name = zone.name, position={x=x, y=y}, location_name="", freeze_history=true })
-            highlight(player, entity.surface, {entity.selection_box})
+            highlight(player, entity.surface, selection_boxes)
 		    return
 		end
 	end
@@ -342,7 +354,9 @@ function registerHandlers()
                     local dialog_settings = ensureDialogSettings(e.player_index)
                     
                     if network and entity then
-                        goTo(player, entity)
+                        local entities = (dialog_settings.highlight_all_scan_results and allValidEntities(network)) or {entity}
+                        local selection_boxes = mapArray(entities, function(entity) return entity.selection_box end)
+                        goTo(player, entity, selection_boxes)
                         dialog_settings.last_network = e.element.tags.network_id
                         if (dialog_settings.close_on_goto) then closeGui(e.player_index)
                         else renderResults(e.player_index) end
@@ -394,6 +408,11 @@ function registerHandlers()
                 on_gui_checked_state_changed = function(e)
                     global.dialog_settings[e.player_index].close_on_goto = e.element.state
                 end
+            },
+            highlight_all_scan_results = {
+                on_gui_checked_state_changed = function(e)
+                    global.dialog_settings[e.player_index].highlight_all_scan_results = e.element.state
+                end
             }
         },
     })
@@ -436,6 +455,9 @@ end)
 script.on_configuration_changed(function()
     for _, player in pairs(game.players) do
         closeGui(player.index)
+    end
+    for _, settings in pairs(global.dialog_settings or {}) do      
+        settings.location = nil
     end
 end)
 
