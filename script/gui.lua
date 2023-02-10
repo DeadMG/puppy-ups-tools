@@ -72,42 +72,42 @@ function renderElectricNetworks(parent, networks, filter, lastNetworkId)
 end
 
 function renderNetworks(networks, filter, lastNetworkId)    
-	local selectableSurfaces = getSelectableSurfaces(networks)
-	filter = filter or "all"
-	
+    local selectableSurfaces = getSelectableSurfaces(networks)
+    filter = filter or "all"
+    
     networks = filterForSurfaces(networks, filter)
     table.sort(networks, function(network1, network2) return #network1.entities < #network2.entities end)
-	
+    
     return {type="flow", direction="vertical", children={
-	    {type="drop-down", caption="Surface", items=selectableSurfaces, selected_index=indexOf(selectableSurfaces, filter) or 1,handlers="ups_tools_handlers.electric_network_filter_changed"},
-	    {type="scroll-pane", horizontal_scroll_policy="never", vertical_scroll_policy="always", style_mods={horizontally_stretchable=true,maximal_height=700}, children={
-	        {type="table", column_count=3, children=flatten(mapArray(networks, function(network)
+        {type="drop-down", caption="Surface", items=selectableSurfaces, selected_index=indexOf(selectableSurfaces, filter) or 1,handlers="ups_tools_handlers.electric_network_filter_changed"},
+        {type="scroll-pane", horizontal_scroll_policy="never", vertical_scroll_policy="always", style_mods={horizontally_stretchable=true,maximal_height=700}, children={
+            {type="table", column_count=3, children=flatten(mapArray(networks, function(network)
                 return renderNetwork(network, network.id == lastNetworkId)
             end))}
-	    }}
-	}}
+        }}
+    }}
 end
 
 function getSelectableSurfaces(networks)
     local surfaces = flatten(mapArray(toArray(networks), function(network) return network.surfaces end))
-	local names = distinctArray(mapArray(surfaces, getSurfaceName))
-	table.insert(names, 1, "all")
-	return names
+    local names = distinctArray(mapArray(surfaces, getSurfaceName))
+    table.insert(names, 1, "all")
+    return names
 end
 
 function filterForSurfaces(networks, filter)
     networks = toArray(networks)
-	if filter == "all" then return networks end
-	return mapArray(networks, function(network)
+    if filter == "all" then return networks end
+    return mapArray(networks, function(network)
         if any(network.surfaces, function(surface) return getSurfaceName(surface) == filter end) then
-		    return network
-		end
-		return nil
-	end)
+            return network
+        end
+        return nil
+    end)
 end
 
 function getSurfaceLabel(network)
-	local surfaces = table.concat(mapArray(network.surfaces, getSurfaceName), ", ")
+    local surfaces = table.concat(mapArray(network.surfaces, getSurfaceName), ", ")
     if #surfaces < 40 then return surfaces end
     return string.sub(surfaces, 1, 37) .. "..."
 end
@@ -172,9 +172,9 @@ end
 
 function any(original, filter)
     for k, v in pairs(original) do
-	    if filter(v) then return true end
-	end
-	return false
+        if filter(v) then return true end
+    end
+    return false
 end
 
 function flatten(original)
@@ -200,12 +200,12 @@ end
 
 function distinctArray(original)
     local result = {}
-	local cache = {}	
+    local cache = {}    
     for _, v in ipairs(original) do
-	    if not cache[v] then 
-     	    table.insert(result, v)
-		    cache[v] = true
-		end
+        if not cache[v] then 
+             table.insert(result, v)
+            cache[v] = true
+        end
     end
     return result
 end
@@ -221,15 +221,15 @@ end
 function toArray(original)
     local result = {}
     for _, v in pairs(original) do
-     	table.insert(result, v)
+         table.insert(result, v)
     end
     return result
 end
 
 function isNavsatAvailable(player)
     if not remote.interfaces['space-exploration'] then return false end
-	if not remote.interfaces['space-exploration'].remote_view_is_unlocked then return false end
-	return remote.call('space-exploration', 'remote_view_is_unlocked', {player=player})
+    if not remote.interfaces['space-exploration'].remote_view_is_unlocked then return false end
+    return remote.call('space-exploration', 'remote_view_is_unlocked', {player=player})
 end
 
 function goTo(player, entity, selection_boxes)
@@ -237,14 +237,14 @@ function goTo(player, entity, selection_boxes)
     local y = entity.position.y or entity.position[2]
 
     if isNavsatAvailable(player) then
-	    local zone = remote.call('space-exploration', 'get_zone_from_surface_index', { surface_index=entity.surface.index })
-		if zone then		
-	        remote.call('space-exploration', 'remote_view_start', { player = player, zone_name = zone.name, position={x=x, y=y}, location_name="", freeze_history=true })
+        local zone = remote.call('space-exploration', 'get_zone_from_surface_index', { surface_index=entity.surface.index })
+        if zone then        
+            remote.call('space-exploration', 'remote_view_start', { player = player, zone_name = zone.name, position={x=x, y=y}, location_name="", freeze_history=true })
             highlight(player, entity.surface, selection_boxes)
-		    return
-		end
-	end
-	player.print("[entity=" .. entity.name .. "] at [gps=" .. x .. "," .. y .. "," .. entity.surface.name .. "]")
+            return
+        end
+    end
+    player.print("[entity=" .. entity.name .. "] at [gps=" .. x .. "," .. y .. "," .. entity.surface.name .. "]")
 end
 
 function clear_markers(player)
@@ -340,12 +340,12 @@ end
 function registerHandlers()
     gui.add_handlers({
         ups_tools_handlers = {
-		    electric_network_filter_changed = {
-			    on_gui_selection_state_changed  = function(e)
-                    global.dialog_settings[e.player_index].filter = e.element.items[e.element.selected_index]		
-                    renderResults(e.player_index)		    
-			    end
-		    },
+            electric_network_filter_changed = {
+                on_gui_selection_state_changed  = function(e)
+                    global.dialog_settings[e.player_index].filter = e.element.items[e.element.selected_index]        
+                    renderResults(e.player_index)            
+                end
+            },
             go_to_network = {
                 on_gui_click = function(e)
                     local player = game.get_player(e.player_index)
@@ -389,12 +389,12 @@ function registerHandlers()
                     global.results = search.search({
                         search_electric = global.dialog_settings[e.player_index].search_electric
                     })
-					
-					if global.dialog_settings then
-					    for _, settings in pairs(global.dialog_settings) do
-						    settings.filter = "all"
-						end
-					end
+                    
+                    if global.dialog_settings then
+                        for _, settings in pairs(global.dialog_settings) do
+                            settings.filter = "all"
+                        end
+                    end
                     
                     renderResults(e.player_index)
                 end
