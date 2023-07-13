@@ -17,6 +17,7 @@ function createWindow(player_index)
     dialog_settings.close_on_goto = dialog_settings.close_on_goto or false
     dialog_settings.highlight_all_scan_results = dialog_settings.highlight_all_scan_results or false
     dialog_settings.search_electric = (dialog_settings.search_electric == nil and true) or dialog_settings.search_electric
+    dialog_settings.search_unpowered = (dialog_settings.search_unpowered == nil and true) or dialog_settings.search_unpowered
     dialog_settings.filter = dialog_settings.filter or "all"
     
     local rootgui = player.gui.screen
@@ -32,6 +33,7 @@ function createWindow(player_index)
                     -- Search options
                     {type="label", caption={"ups-tools.search-title"}},
                     {type="checkbox", caption={"ups-tools.search-electric"}, save_as="search_electric", state=dialog_settings.search_electric, handlers="ups_tools_handlers.search_electric"},
+                    {type="checkbox", caption={"ups-tools.search-unpowered"}, save_as="search_unpowered", state=dialog_settings.search_unpowered, handlers="ups_tools_handlers.search_unpowered"},
                     {type="checkbox", caption={"ups-tools.close_on_goto"}, save_as="close_on_goto", state=dialog_settings.close_on_goto, handlers="ups_tools_handlers.close_on_goto"},
                     {type="checkbox", caption={"ups-tools.highlight_all_scan_results"}, save_as="highlight_all_scan_results", state=dialog_settings.highlight_all_scan_results, handlers="ups_tools_handlers.highlight_all_scan_results"},
                     -- Results
@@ -61,12 +63,19 @@ function renderResults(player_index)
     
     local dialog_settings = ensureDialogSettings(player_index)
     if not dialog_settings.dialog then return end    
+
+    dialog_settings.dialog.results.clear()
+    if (dialog_settings.search_electric==true and global.results.electric_networks) then
+        renderElectricNetworks(dialog_settings.dialog.results, global.results.electric_networks, dialog_settings.filter, dialog_settings.last_network)
+    end
+    if (dialog_settings.search_unpowered==true and global.results.unpowered_stuff) then
+        renderUnpoweredStuff(dialog_settings.dialog.results, global.results.unpowered_stuff, dialog_settings.filter)
+    end
     
-    renderElectricNetworks(dialog_settings.dialog.results, global.results.electric_networks, dialog_settings.filter, dialog_settings.last_network)
 end
 
 function renderElectricNetworks(parent, networks, filter, lastNetworkId)
-    parent.clear()   
+    --parent.clear()   
 
     gui.build(parent, {renderNetworks(networks, filter, lastNetworkId)})
 end
@@ -87,6 +96,65 @@ function renderNetworks(networks, filter, lastNetworkId)
         }}
     }}
 end
+
+function renderUnpoweredStuff(parent, unpoweredstuff, filter)
+    --parent.clear()   
+
+    gui.build(parent, {renderUnpowered(unpoweredstuff, filter)})
+end
+
+function renderUnpowered(unpoweredstuff, filter)    
+    local selectableSurfaces = getUnpoweredSurfaces(unpoweredstuff)
+    filter = filter or "all"
+    
+    unpoweredstuff = filterForSurfaces(unpoweredstuff, filter)
+    table.sort(unpoweredstuff, function(network1, network2) return #network1.entities < #network2.entities end)
+    
+    return {type="flow", direction="vertical", children={
+        {type="drop-down", caption="Surface", items=selectableSurfaces, selected_index=indexOf(selectableSurfaces, filter) or 1,handlers="ups_tools_handlers.electric_network_filter_changed"},
+        {type="scroll-pane", horizontal_scroll_policy="never", vertical_scroll_policy="always", style_mods={horizontally_stretchable=true,maximal_height=700}, children={
+            {   type="table", 
+                column_count=3, 
+                children=flatten(perSurface(unpoweredstuff))
+            --children=flatten(mapArray(unpoweredstuff, 
+            --function(network)  
+            --    return renderUnpoweredEntity(network)
+            --end
+            }
+        }}
+    }}
+end
+
+function perSurface(allunpoweredstuff)
+    local result = {}
+    for _, w in ipairs(allunpoweredstuff) do
+        for _, v in ipairs(w.entities) do
+            local value = renderUnpoweredEntity(v)
+            if value ~= nil then
+                table.insert(result, value)
+            end
+        end
+    end
+    return result
+end
+
+--temp to see if I can do it
+function getUnpoweredSurfaces(networks)
+    --local tempname
+    --local znames = {}
+    --for _,w in pairs(networks) do
+    --    for j,v in pairs(w.surfaces) do
+    --        tempname = v.name.." ("..tostring(#w.entities)..")"
+    --        table.insert(znames, tempname)
+    --    end
+    --end
+    local surfaces = flatten(mapArray(toArray(networks), function(network) return network.surfaces end))
+    local names = distinctArray(mapArray(surfaces, getSurfaceName))
+    --table.insert(znames, 1, "all")
+    table.insert(names, 1, "all")
+    return names
+end
+--------------------
 
 function getSelectableSurfaces(networks)
     local surfaces = flatten(mapArray(toArray(networks), function(network) return network.surfaces end))
@@ -137,6 +205,32 @@ function renderNetwork(network, isLast)
             handlers="ups_tools_handlers.delete_network"
         }
     }
+end
+
+function renderUnpoweredEntity(unpoweredentity)
+    --local sample_entity = firstValidEntity(unpoweredentity)
+    --if not sample_entity then return end
+    local style = { font_color=LINE_COLOR } or {}
+    if unpoweredentity.valid then
+        return {
+            {type="label", caption=unpoweredentity.name .. "#"..tostring(unpoweredentity.unit_number) .. " (" .. unpoweredentity.surface.name ..  ")", style_mods=style },
+            {
+                type="sprite-button", 
+                sprite="utility/go_to_arrow", 
+                tags={goto_id=unpoweredentity.unit_number, surface_id=unpoweredentity.surface.index},--unpoweredentity.id}, 
+                style_mods={height=20,width=20}, 
+                handlers="ups_tools_handlers.go_to_unpowered"
+            },
+            {
+                type="sprite-button", 
+                sprite="utility/trash", 
+                tags={delete_id=unpoweredentity.unit_number, del_surface_id=unpoweredentity.surface.index},--unpoweredentity.id}, 
+                style_mods={height=20,width=20}, 
+                handlers=nil --reminder to implement handler to deconstruct this entity
+            }
+        }
+    end
+    return {}
 end
 
 function firstValidEntity(network)
@@ -233,18 +327,18 @@ function isNavsatAvailable(player)
 end
 
 function goTo(player, entity, selection_boxes)
-    local x = entity.position.x or entity.position[1]
-    local y = entity.position.y or entity.position[2]
-
-    if isNavsatAvailable(player) then
-        local zone = remote.call('space-exploration', 'get_zone_from_surface_index', { surface_index=entity.surface.index })
-        if zone then        
-            remote.call('space-exploration', 'remote_view_start', { player = player, zone_name = zone.name, position={x=x, y=y}, location_name="", freeze_history=true })
-            highlight(player, entity.surface, selection_boxes)
-            return
+        local x = entity.position.x or entity.position[1]
+        local y = entity.position.y or entity.position[2]
+    
+        if isNavsatAvailable(player) then
+            local zone = remote.call('space-exploration', 'get_zone_from_surface_index', { surface_index=entity.surface.index })
+            if zone then        
+                remote.call('space-exploration', 'remote_view_start', { player = player, zone_name = zone.name, position={x=x, y=y}, location_name="", freeze_history=true })
+                highlight(player, entity.surface, selection_boxes)
+                return
+            end
         end
-    end
-    player.print("[entity=" .. entity.name .. "] at [gps=" .. x .. "," .. y .. "," .. entity.surface.name .. "]")
+        player.print("[entity=" .. entity.name .. "] at [gps=" .. x .. "," .. y .. "," .. entity.surface.name .. "]")
 end
 
 function clear_markers(player)
@@ -365,6 +459,49 @@ function registerHandlers()
                     end
                 end
             },
+            go_to_unpowered = {
+                on_gui_click = function(e)
+                    local player = game.get_player(e.player_index)
+
+                    local entity_id = e.element.tags.goto_id--network and firstValidEntity(network)
+                    local surface_id = e.element.tags.surface_id
+                    local dialog_settings = ensureDialogSettings(e.player_index)
+                    
+                    --local results = {}
+                    --for _, entity in pairs(network.entities) do
+                    --    if entity.valid and entity.electric_network_id == network.id then table.insert(results, entity) end
+                    --end
+                    --return results
+
+                    if entity_id then
+                        local foundentity = {}
+                        for _, surface in pairs(global.results.unpowered_stuff) do
+                            if surface_id == surface.id then
+                                for _, entity in ipairs(surface.entities) do
+                                    if entity.valid then 
+                                        if entity_id == entity.unit_number then
+                                            foundentity = entity
+                                            break
+                                        end
+                                    end
+                                end
+                                break
+                            end
+                        end
+                        local entities={foundentity}
+                        --local entities = (dialog_settings.highlight_all_scan_results and allValidEntities(network)) or {entity}
+                        local selection_boxes = mapArray(entities, function(entity) return entity.selection_box end)
+                        if foundentity.valid then --catch if foundentity stays empty
+                            goTo(player, foundentity, selection_boxes)
+                        end
+                        --dialog_settings.last_network = e.element.tags.network_id
+                        if (dialog_settings.close_on_goto) then closeGui(e.player_index)
+                        else renderResults(e.player_index) end
+                    else
+                        renderResults(e.player_index)
+                    end
+                end
+            },
             delete_network = {
                 on_gui_click = function(e)
                     local player = game.get_player(e.player_index)
@@ -386,9 +523,12 @@ function registerHandlers()
             },
             search = {
                 on_gui_click = function(e)
-                    global.results = search.search({
-                        search_electric = global.dialog_settings[e.player_index].search_electric
-                    })
+                    global.results = search.search(
+                        {
+                        search_electric = global.dialog_settings[e.player_index].search_electric,
+                        search_unpowered = global.dialog_settings[e.player_index].search_unpowered
+                        }
+                    )
                     
                     if global.dialog_settings then
                         for _, settings in pairs(global.dialog_settings) do
@@ -402,6 +542,11 @@ function registerHandlers()
             search_electric = {
                 on_gui_checked_state_changed = function(e)
                     global.dialog_settings[e.player_index].search_electric = e.element.state
+                end
+            },
+            search_unpowered = {
+                on_gui_checked_state_changed = function(e)
+                    global.dialog_settings[e.player_index].search_unpowered = e.element.state
                 end
             },
             close_on_goto = {
@@ -456,7 +601,9 @@ script.on_configuration_changed(function()
     for _, player in pairs(game.players) do
         closeGui(player.index)
     end
-    ensureDialogSettings().location = nil
+    for _, settings in pairs(global.dialog_settings or {}) do      
+        settings.location = nil
+    end
 end)
 
 function toggleGui(player_index)
