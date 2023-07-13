@@ -327,18 +327,18 @@ function isNavsatAvailable(player)
 end
 
 function goTo(player, entity, selection_boxes)
-    local x = entity.position.x or entity.position[1]
-    local y = entity.position.y or entity.position[2]
-
-    if isNavsatAvailable(player) then
-        local zone = remote.call('space-exploration', 'get_zone_from_surface_index', { surface_index=entity.surface.index })
-        if zone then        
-            remote.call('space-exploration', 'remote_view_start', { player = player, zone_name = zone.name, position={x=x, y=y}, location_name="", freeze_history=true })
-            highlight(player, entity.surface, selection_boxes)
-            return
+        local x = entity.position.x or entity.position[1]
+        local y = entity.position.y or entity.position[2]
+    
+        if isNavsatAvailable(player) then
+            local zone = remote.call('space-exploration', 'get_zone_from_surface_index', { surface_index=entity.surface.index })
+            if zone then        
+                remote.call('space-exploration', 'remote_view_start', { player = player, zone_name = zone.name, position={x=x, y=y}, location_name="", freeze_history=true })
+                highlight(player, entity.surface, selection_boxes)
+                return
+            end
         end
-    end
-    player.print("[entity=" .. entity.name .. "] at [gps=" .. x .. "," .. y .. "," .. entity.surface.name .. "]")
+        player.print("[entity=" .. entity.name .. "] at [gps=" .. x .. "," .. y .. "," .. entity.surface.name .. "]")
 end
 
 function clear_markers(player)
@@ -491,7 +491,7 @@ function registerHandlers()
                         local entities={foundentity}
                         --local entities = (dialog_settings.highlight_all_scan_results and allValidEntities(network)) or {entity}
                         local selection_boxes = mapArray(entities, function(entity) return entity.selection_box end)
-                        if foundentity then --catch if foundentity stays empty
+                        if foundentity.valid then --catch if foundentity stays empty
                             goTo(player, foundentity, selection_boxes)
                         end
                         --dialog_settings.last_network = e.element.tags.network_id
