@@ -71,15 +71,18 @@ function renderElectricNetworks(parent, networks, filter, lastNetworkId)
     gui.build(parent, {renderNetworks(networks, filter, lastNetworkId)})
 end
 
-function renderNetworks(networks, filter, lastNetworkId)    
-    local selectableSurfaces = getSelectableSurfaces(networks)
+function renderNetworks(networks, filter, lastNetworkId)
+    networks = toArray(networks)
+    local networksBySurface = getNetworksBySurface(networks)
+    local selectableSurfaceIndexes = keys(networksBySurface)
+    local selectableSurfaceNames = getSelectableSurfaces(selectableSurfaceIndexes, networksBySurface)
     filter = filter or "all"
     
-    networks = filterForSurfaces(networks, filter)
+    networks = filterForSurfaces(networks, networksBySurface, filter)
     table.sort(networks, function(network1, network2) return #network1.entities < #network2.entities end)
     
     return {type="flow", direction="vertical", children={
-        {type="drop-down", caption="Surface", items=selectableSurfaces, selected_index=indexOf(selectableSurfaces, filter) or 1,handlers="ups_tools_handlers.electric_network_filter_changed"},
+        {type="drop-down", caption="Surface", tags={selectableSurfaceIndexes = selectableSurfaceIndexes}, items=selectableSurfaceNames, selected_index=indexOf(selectableSurfaceNames, filter) or 1,handlers="ups_tools_handlers.electric_network_filter_changed"},
         {type="scroll-pane", horizontal_scroll_policy="never", vertical_scroll_policy="always", style_mods={horizontally_stretchable=true,maximal_height=700}, children={
             {type="table", column_count=3, children=flatten(mapArray(networks, function(network)
                 return renderNetwork(network, network.id == lastNetworkId)
@@ -88,22 +91,29 @@ function renderNetworks(networks, filter, lastNetworkId)
     }}
 end
 
-function getSelectableSurfaces(networks)
-    local surfaces = flatten(mapArray(toArray(networks), function(network) return network.surfaces end))
-    local names = distinctArray(mapArray(surfaces, getSurfaceName))
-    table.insert(names, 1, "all")
+function getNetworksBySurface(networks)
+    local networksBySurface = {}
+    for _, network in ipairs(networks) do
+        for _, surface in ipairs(network.surfaces) do
+            networksBySurface[surface.index] = networksBySurface[surface.index] or {}
+            table.insert(networksBySurface[surface.index], network)
+        end
+    end
+    return networksBySurface;
+end
+
+function getSelectableSurfaces(surfaces, networksBySurface)
+    local names = { "all" }
+    for _, surfaceIndex in ipairs(surfaces) do
+        local surface = game.surfaces[surfaceIndex]
+        table.insert(names, getSurfaceName(surface) .. " (" .. #networksBySurface[surfaceIndex] .. ")")
+    end
     return names
 end
 
-function filterForSurfaces(networks, filter)
-    networks = toArray(networks)
-    if filter == "all" then return networks end
-    return mapArray(networks, function(network)
-        if any(network.surfaces, function(surface) return getSurfaceName(surface) == filter end) then
-            return network
-        end
-        return nil
-    end)
+function filterForSurfaces(networks, networksBySurface, filter)
+    if filter == "all" or not filter then return networks end
+    return networksBySurface[filter]
 end
 
 function getSurfaceLabel(network)
@@ -196,6 +206,14 @@ function mapArray(original, map)
         end
     end
     return result
+end
+
+function keys(t)
+    local keys = {}
+    for k, v in pairs(t) do
+        table.insert(keys, k)
+    end
+    return keys
 end
 
 function distinctArray(original)
@@ -342,7 +360,13 @@ function registerHandlers()
         ups_tools_handlers = {
             electric_network_filter_changed = {
                 on_gui_selection_state_changed  = function(e)
-                    global.dialog_settings[e.player_index].filter = e.element.items[e.element.selected_index]        
+                    local filterValue = e.element.items[e.element.selected_index]
+                    if filterValue == "all" then
+                        global.dialog_settings[e.player_index].filter = nil
+                    else
+                        global.dialog_settings[e.player_index].filter = e.element.tags.selectableSurfaceIndexes[e.element.selected_index - 1]
+                    end
+
                     renderResults(e.player_index)            
                 end
             },
@@ -392,7 +416,7 @@ function registerHandlers()
                     
                     if global.dialog_settings then
                         for _, settings in pairs(global.dialog_settings) do
-                            settings.filter = "all"
+                            settings.filter = nil
                         end
                     end
                     
