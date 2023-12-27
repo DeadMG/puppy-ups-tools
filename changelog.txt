@@ -3,6 +3,7 @@ Version: 0.2.4
 Date: 2023.12.27
   Changes:
     - Surface names in the dropdown now list the number of surfaces in them.
+    - Now a configurable bottom-right button rather than always-on top-left button
 
 ---------------------------------------------------------------------------------------------------
 Version: 0.2.3

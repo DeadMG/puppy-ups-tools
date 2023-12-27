@@ -1,44 +1,29 @@
 local event = require("__flib__.event")
-local mod_gui = require 'mod-gui'
 local gui = require('script/gui')
+local mod_gui = require 'mod-gui'
 
 local button_name = 'puppy_ups_tools_button'
 
-function create_flow_button(player)
-    if mod_gui.get_button_flow(player)[button_name] then
-        return
-    end
-
-    mod_gui.get_button_flow(player).add{
-        type = "sprite-button",
-        name = button_name,
-        sprite = "utility/time_editor_icon",
-        style = mod_gui.button_style
-    }
-end
-
 script.on_init(function(event)
     gui.onInit()
+end)
+
+script.on_load(function(event)
+    gui.onLoad()
+end)
+
+script.on_configuration_changed(function()
+    gui.onConfigurationChanged()
     for _, player in pairs(game.players) do
-        create_flow_button(player)
+         local button = mod_gui.get_button_flow(player)[button_name]
+         if button then button.destroy() end
     end
 end)
 
-event.register(defines.events.on_player_created, function(event)
-    create_flow_button(game.players[event.player_index])
-end)
-
-event.register(defines.events.on_gui_click, function(event)
-    if gui.passthroughGuiEvent(event) then return end
-    local target = event.element
+event.register(defines.events.on_lua_shortcut, function(event)
     local player = game.players[event.player_index]
-    if not (player and player.valid and target and target.valid) then return end
+    if not (player and player.valid) then return end
+    if event.prototype_name ~= "ups_tools_open_interface" then return end
 
-    if target.name ~= button_name then return end
-    
-    if mod_gui.get_frame_flow(player)[button_name] then
-        mod_gui.get_frame_flow(player)[button_name].destroy()
-    else
-        gui.toggleGui(event.player_index)
-    end
+    gui.toggleGui(event.player_index)
 end)

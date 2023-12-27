@@ -454,9 +454,9 @@ end
 registerHandlers()
 registerTemplates()
 
-event.on_load(function()
+function onLoad()
   gui.build_lookup_tables()
-end)
+end
 
 function onInit()
   global.dialog_settings = {}
@@ -476,14 +476,14 @@ event.register(defines.events.on_gui_location_changed, function(e)
     global.dialog_settings[e.player_index].location = e.element.location
 end)
 
-script.on_configuration_changed(function()
+function onConfigurationChanged()
     for _, player in pairs(game.players) do
         closeGui(player.index)
     end
     for _, settings in pairs(global.dialog_settings or {}) do      
         settings.location = nil
     end
-end)
+end
 
 function toggleGui(player_index)
     local player = game.get_player(player_index)
@@ -495,4 +495,4 @@ function toggleGui(player_index)
     end
 end
 
-return { toggleGui = toggleGui, onInit = onInit, passthroughGuiEvent = passthroughGuiEvent }
+return { toggleGui = toggleGui, onInit = onInit, onLoad = onLoad, onConfigurationChanged = onConfigurationChanged, passthroughGuiEvent = passthroughGuiEvent }
