@@ -113,7 +113,7 @@ end
 
 function filterForSurfaces(networks, networksBySurface, filter)
     if filter == "all" or not filter then return networks end
-    return networksBySurface[filter]
+    return networksBySurface[filter] or {}
 end
 
 function getSurfaceLabel(network)
