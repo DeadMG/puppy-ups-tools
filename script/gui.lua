@@ -95,8 +95,10 @@ function getNetworksBySurface(networks)
     local networksBySurface = {}
     for _, network in ipairs(networks) do
         for _, surface in ipairs(network.surfaces) do
-            networksBySurface[surface.index] = networksBySurface[surface.index] or {}
-            table.insert(networksBySurface[surface.index], network)
+            if surface.valid then
+                networksBySurface[surface.index] = networksBySurface[surface.index] or {}
+                table.insert(networksBySurface[surface.index], network)
+            end
         end
     end
     return networksBySurface;
